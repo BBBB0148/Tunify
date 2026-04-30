@@ -16,7 +16,7 @@
     const encodeData = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
     const decodeData = (str) => JSON.parse(decodeURIComponent(escape(atob(str))));
 
-    // --- 2. PREMIUM CSS (Splash & Layout) ---
+    // --- 2. PREMIUM CSS ---
     const style = document.createElement('style');
     style.textContent = `
         :root { --sp-green: #1DB954; --bg: #000; --glass: rgba(255, 255, 255, 0.1); }
@@ -24,7 +24,6 @@
         
         html, body { width: 100%; height: 100%; background: #000; color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
 
-        /* Splash Screen Logic */
         #splash-screen {
             position: fixed; inset: 0; background: #000; z-index: 9999;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -41,12 +40,26 @@
             100% { transform: scale(0.9); opacity: 0.8; }
         }
 
+        /* Cool Login Screen */
+        #auth-screen {
+            position: fixed; inset: 0; background: linear-gradient(135deg, #121212 0%, #000 100%);
+            z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center;
+        }
+        #auth-screen.active { display: flex; }
+        .login-card { width: 100%; max-width: 400px; }
+        .login-btn {
+            background: white; color: black; padding: 16px 24px; border-radius: 50px;
+            font-weight: 700; display: flex; align-items: center; justify-content: center;
+            gap: 12px; margin-top: 40px; cursor: pointer; transition: transform 0.2s;
+        }
+        .login-btn:active { transform: scale(0.98); }
+
         #app-root { 
             display: flex; flex-direction: column; height: 100dvh; width: 100%; 
             background: linear-gradient(to bottom, #121212 0%, #000 100%); 
-            opacity: 0; transition: opacity 0.8s ease;
+            display: none;
         }
-        #app-root.visible { opacity: 1; }
+        #app-root.visible { display: flex; }
         
         header { padding: 50px 15px 10px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .u-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 1px solid var(--glass); }
@@ -94,12 +107,24 @@
             <div style="margin-top:20px; font-weight:800; letter-spacing:2px; font-size:0.9rem;">TUNIFY</div>
         </div>
 
+        <div id="auth-screen">
+            <div class="login-card">
+                <i class="fa-solid fa-headphones" style="font-size:4rem; color:var(--sp-green); margin-bottom:20px;"></i>
+                <h1 style="font-size:2rem; font-weight:900;">Millions of songs.</h1>
+                <p style="color:#b3b3b3; margin-top:10px;">Free on Tunify.</p>
+                <div class="login-btn" onclick="Tunify.login()">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Logo.svg" style="width:20px;">
+                    Continue with Google
+                </div>
+            </div>
+        </div>
+
         <div id="app-root">
             <header>
                 <div class="u-avatar" id="user-pfp"></div>
                 <div style="display:flex; gap:15px; font-size:1.2rem;">
                     <i class="fa-regular fa-bell"></i>
-                    <i class="fa-solid fa-gear"></i>
+                    <i class="fa-solid fa-arrow-right-from-bracket" onclick="Tunify.logout()"></i>
                 </div>
             </header>
             <main id="main-view"></main>
@@ -144,18 +169,14 @@
     const audio = document.getElementById('audio-engine');
     const mainView = document.getElementById('main-view');
 
-    // --- 4. STARTUP SEQUENCE ---
-    setTimeout(() => {
-        const splash = document.getElementById('splash-screen');
-        const app = document.getElementById('app-root');
-        splash.style.opacity = '0';
-        setTimeout(() => {
-            splash.style.visibility = 'hidden';
-            app.classList.add('visible');
-        }, 600);
-    }, 3000); // 3 seconds splash
-
+    // --- 4. TUNIFY LOGIC ---
     window.Tunify = {
+        login: () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            firebase.auth().signInWithPopup(provider).catch(e => alert(e.message));
+        },
+        logout: () => firebase.auth().signOut(),
+        
         tab: (t, el) => {
             document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
             el.classList.add('active');
@@ -165,7 +186,7 @@
         },
 
         loadHome: () => {
-            const categories = ["Trending", "Phonk", "Global Hits", "Chill", "Party", "Hip Hop"];
+            const categories = ["Trending", "Phonk", "Global Hits", "Chill", "Party"];
             const randoms = categories.sort(() => 0.5 - Math.random()).slice(0, 3);
             mainView.innerHTML = `<div class="hero-grid" id="hero-area"></div><h2 class="section-title">${randoms[0]}</h2><div class="shelf" id="h1"></div><h2 class="section-title">${randoms[1]}</h2><div class="shelf" id="h2"></div><h2 class="section-title">${randoms[2]}</h2><div class="shelf" id="h3"></div>`;
             fetchHero(); fetchShelf(randoms[0], 'h1'); fetchShelf(randoms[1], 'h2'); fetchShelf(randoms[2], 'h3');
@@ -173,9 +194,7 @@
 
         loadSearch: () => {
             mainView.innerHTML = `<h2 class="section-title">Search</h2><input type="search" id="s-in" style="width:100%; padding:15px; border-radius:8px; background:#282828; border:none; color:white; margin-bottom:20px; font-weight:600;" placeholder="Artists, songs..."><div id="s-res" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between;"></div>`;
-            document.getElementById('s-in').oninput = (e) => {
-                if(e.target.value.length > 2) fetchShelf(e.target.value, 's-res', true);
-            };
+            document.getElementById('s-in').oninput = (e) => { if(e.target.value.length > 2) fetchShelf(e.target.value, 's-res', true); };
         },
 
         loadFavs: () => {
@@ -186,25 +205,21 @@
 
         play: (encSong, encList) => {
             const song = decodeData(encSong);
-            const list = decodeData(encList);
-            queue = list;
+            queue = decodeData(encList);
             currentIndex = queue.findIndex(s => s.id === song.id);
             audio.src = song.downloadUrl[4].url;
-            audio.play().catch(console.error);
-            updateUI(song);
+            audio.play(); updateUI(song);
             document.getElementById('mini-player').classList.add('show');
         },
 
         toggle: () => audio.paused ? audio.play() : audio.pause(),
         next: () => {
             currentIndex = isShuffle ? Math.floor(Math.random() * queue.length) : (currentIndex + 1) % queue.length;
-            const s = queue[currentIndex];
-            updateUI(s); audio.src = s.downloadUrl[4].url; audio.play();
+            const s = queue[currentIndex]; updateUI(s); audio.src = s.downloadUrl[4].url; audio.play();
         },
         prev: () => {
             currentIndex = (currentIndex - 1 + queue.length) % queue.length;
-            const s = queue[currentIndex];
-            updateUI(s); audio.src = s.downloadUrl[4].url; audio.play();
+            const s = queue[currentIndex]; updateUI(s); audio.src = s.downloadUrl[4].url; audio.play();
         },
         shuffle: () => { isShuffle = !isShuffle; document.getElementById('ctrl-shuf').style.color = isShuffle ? 'var(--sp-green)' : '#555'; },
         repeat: () => { repeatMode = (repeatMode + 1) % 3; document.getElementById('ctrl-rep').style.color = repeatMode > 0 ? 'var(--sp-green)' : '#555'; },
@@ -218,6 +233,7 @@
         closePlayer: () => document.getElementById('player-full').classList.remove('active')
     };
 
+    // --- API & UI HELPERS ---
     async function fetchHero() {
         const r = await fetch(`${API}/search/songs?query=Popular`);
         const d = await r.json();
@@ -234,30 +250,18 @@
     }
 
     async function fetchShelf(q, id, grid = false) {
-        try {
-            const r = await fetch(`${API}/search/songs?query=${encodeURIComponent(q)}`);
-            const d = await r.json();
-            if(d.success) {
-                const filtered = d.data.results.filter(s => !blocklist.some(w => s.name.toLowerCase().includes(w)));
-                renderList(filtered, id, grid);
-            }
-        } catch(e) { console.error("API Error", e); }
+        const r = await fetch(`${API}/search/songs?query=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        if(d.success) {
+            const filtered = d.data.results.filter(s => !blocklist.some(w => s.name.toLowerCase().includes(w)));
+            renderList(filtered, id, grid);
+        }
     }
 
     function renderList(list, id, grid) {
-        const cont = document.getElementById(id);
-        if(!cont) return;
+        const cont = document.getElementById(id); if(!cont) return;
         const listEnc = encodeData(list);
-        cont.innerHTML = list.map(s => {
-            const songEnc = encodeData(s);
-            return `
-                <div class="item" style="${grid ? 'width:46%; margin-bottom:15px;' : ''}" onclick="Tunify.play('${songEnc}', '${listEnc}')">
-                    <img src="${s.image[2].url}">
-                    <p>${s.name}</p>
-                    <span>${s.primaryArtists}</span>
-                </div>
-            `;
-        }).join('');
+        cont.innerHTML = list.map(s => `<div class="item" style="${grid ? 'width:46%; margin-bottom:15px;' : ''}" onclick="Tunify.play('${encodeData(s)}', '${listEnc}')"><img src="${s.image[2].url}"><p>${s.name}</p><span>${s.primaryArtists}</span></div>`).join('');
     }
 
     function updateUI(s) {
@@ -276,6 +280,7 @@
         document.getElementById('f-fav-btn').className = isLiked ? 'fa-solid fa-heart heart-btn liked' : 'fa-solid fa-heart heart-btn';
     }
 
+    // --- EVENTS & AUTH ---
     audio.ontimeupdate = () => {
         const p = (audio.currentTime / audio.duration) * 100 || 0;
         document.getElementById('p-fill').style.width = p + '%';
@@ -294,12 +299,30 @@
     document.getElementById('mini-player').onclick = (e) => { if(e.target.id !== 'm-play-btn') document.getElementById('player-full').classList.add('active'); };
     document.getElementById('m-play-btn').onclick = (e) => { e.stopPropagation(); Tunify.toggle(); };
 
+    // --- FIREBASE INITIALIZATION ---
     firebase.initializeApp({ apiKey: "AIzaSyDWI8raVFZ4HEzxAUYGfY1vOfqHoPvQiD0", authDomain: "tunify-8592f.firebaseapp.com", projectId: "tunify-8592f" });
-    firebase.auth().onAuthStateChanged(user => { 
-        if(user) {
-            document.getElementById('user-pfp').innerHTML = `<img src="${user.photoURL}">`;
-            Tunify.loadHome(); 
-        }
+    
+    firebase.auth().onAuthStateChanged(user => {
+        const splash = document.getElementById('splash-screen');
+        const auth = document.getElementById('auth-screen');
+        const app = document.getElementById('app-root');
+
+        setTimeout(() => {
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.visibility = 'hidden';
+                if (user) {
+                    auth.classList.remove('active');
+                    app.classList.add('visible');
+                    document.getElementById('user-pfp').innerHTML = `<img src="${user.photoURL}">`;
+                    Tunify.loadHome();
+                } else {
+                    app.classList.remove('visible');
+                    auth.classList.add('active');
+                }
+            }, 600);
+        }, 2000);
     });
 
 })();
+                                                                  
